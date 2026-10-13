@@ -1,0 +1,75 @@
+<!doctype html>
+<html lang="zh-Hant">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, user-scalable=no">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<title>觸控診斷</title>
+<style>
+/* Layout: one-screen tool. Instructions + live event log on top, three lane pads at the bottom like the game. */
+:root{--bg:#17131f;--panel:#231c30;--fg:#f1ecf8;--muted:#a79bb8;--ok:#8fd16a;--warn:#ffcf3f;--bad:#ff6b5b;--pad:#c9352a;
+  --mono:ui-monospace,Menlo,Consolas,monospace;--body:"PingFang TC","Noto Sans TC",system-ui,sans-serif;color-scheme:dark}
+html,body{height:100%;margin:0}
+body{background:var(--bg);color:var(--fg);font-family:var(--body);touch-action:none;overscroll-behavior:none;-webkit-user-select:none;user-select:none;-webkit-touch-callout:none}
+.app{box-sizing:border-box;height:100%;display:flex;flex-direction:column;gap:10px;padding:12px 16px calc(12px + env(safe-area-inset-bottom,0px))}
+h1{margin:0;font-size:18px}
+p{margin:0;font-size:13px;color:var(--muted);line-height:1.5}
+.stats{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:6px}
+.stat{background:var(--panel);border-radius:8px;padding:6px 8px;display:grid;gap:2px}
+.stat span{font-size:11px;color:var(--muted)}
+.stat b{font-family:var(--mono);font-size:18px;font-variant-numeric:tabular-nums}
+.log{flex:1;min-height:0;overflow:hidden;background:var(--panel);border-radius:8px;padding:8px;font-family:var(--mono);font-size:11.5px;line-height:1.45;white-space:pre}
+.log .s{color:var(--ok)} .log .m{color:var(--warn)} .log .e{color:var(--muted)} .log .c{color:var(--bad)} .log .p{color:#7fb8ff} .log .k{color:#e59cff}
+.pads{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;height:24vh;min-height:120px}
+.pad{background:var(--pad);border-radius:14px;display:grid;place-items:center;font-size:22px;font-weight:800;color:#fff;transition:filter .05s}
+.pad.on{filter:brightness(1.5)}
+.row{display:flex;gap:8px}
+button{font:inherit;font-size:13px;border:0;border-radius:8px;padding:8px 12px;background:var(--panel);color:var(--fg)}
+html{touch-action:none}
+</style>
+</head>
+<body>
+<div class="app">
+  <h1>觸控診斷</h1>
+  <p>獨立網頁版：跟上次一樣照「中左右」的次序快速按十組（共 30 下），錄影或截圖給我。「按下」應該等於你實際按的次數。</p>
+  <div class="stats">
+    <div class="stat"><span>按下 start</span><b id="cS">0</b></div>
+    <div class="stat"><span>移動跳行</span><b id="cJ">0</b></div>
+    <div class="stat"><span>放開 end</span><b id="cE">0</b></div>
+    <div class="stat"><span>取消 cancel</span><b id="cC">0</b></div>
+    <div class="stat"><span>pointer 按下</span><b id="cP">0</b></div>
+    <div class="stat"><span>click</span><b id="cK">0</b></div>
+    <div class="stat"><span>dblclick</span><b id="cD">0</b></div>
+    <div class="stat"><span>其他手勢</span><b id="cG">0</b></div>
+  </div>
+  <div class="log" id="log"></div>
+  <div class="row"><button type="button" id="clear">清除重來</button><p id="env" style="align-self:center"></p></div>
+  <div class="pads" id="pads"><div class="pad" data-l="0">左</div><div class="pad" data-l="1">中</div><div class="pad" data-l="2">右</div></div>
+</div>
+<script>
+(()=>{
+  const $=id=>document.getElementById(id),pads=$('pads'),log=$('log');
+  let lastEnd=0;const cnt={S:0,J:0,E:0,C:0,P:0,K:0,D:0,G:0},lines=[],live=new Map();let t0=0;
+  $('env').textContent=(navigator.userAgent.match(/(iPhone|iPad|Android[^;)]*)/)||['?'])[0]+' · '+innerWidth+'×'+innerHeight+' · '+devicePixelRatio+'x · '+(self===top?'無外框':'在框內')+(navigator.standalone?' · 主畫面':'');
+  const laneAt=x=>{const r=pads.getBoundingClientRect();return Math.max(0,Math.min(2,Math.floor((x-r.left)/(r.width/3))))};
+  const name=['左','中','右'];
+  function add(cls,txt){const now=performance.now();if(!t0)t0=now;lines.unshift(`<span class="${cls}">${String(Math.round(now-t0)).padStart(6)}ms ${txt}</span>`);if(lines.length>40)lines.length=40;log.innerHTML=lines.join('\n');}
+  function show(){for(const k in cnt)$('c'+k).textContent=cnt[k];}
+  function flash(l){const p=pads.children[l];p.classList.add('on');setTimeout(()=>p.classList.remove('on'),80);}
+  const fingers=e=>`手指數 ${e.touches.length}`;
+  pads.addEventListener('touchstart',e=>{e.preventDefault();for(const t of e.changedTouches){const l=laneAt(t.clientX);live.set(t.identifier,{x:t.clientX,y:t.clientY,l,t:e.timeStamp});cnt.S++;flash(l);add('s',`按下  #${t.identifier} ${name[l]} 距上次放開${lastEnd?Math.round(e.timeStamp-lastEnd):'-'}ms ${fingers(e)}`);}show();},{passive:false});
+  pads.addEventListener('touchmove',e=>{e.preventDefault();for(const t of e.changedTouches){const o=live.get(t.identifier);if(!o)continue;const l=laneAt(t.clientX),d=Math.hypot(t.clientX-o.x,t.clientY-o.y),dt=Math.max(1,e.timeStamp-o.t);
+    if(l!==o.l){cnt.J++;flash(l);add('m',`跳行  #${t.identifier} ${name[o.l]}→${name[l]} ${Math.round(d)}px/${Math.round(dt)}ms`);o.l=l;}o.x=t.clientX;o.y=t.clientY;o.t=e.timeStamp;}show();},{passive:false});
+  pads.addEventListener('touchend',e=>{e.preventDefault();for(const t of e.changedTouches){const o=live.get(t.identifier);lastEnd=e.timeStamp;cnt.E++;add('e',`放開  #${t.identifier} ${name[laneAt(t.clientX)]}${o?'':'（沒看到按下）'} ${fingers(e)}`);live.delete(t.identifier);}show();},{passive:false});
+  pads.addEventListener('touchcancel',e=>{for(const t of e.changedTouches){cnt.C++;add('c',`取消  #${t.identifier}`);live.delete(t.identifier);}show();});
+  $('clear').addEventListener('click',()=>{for(const k in cnt)cnt[k]=0;lines.length=0;log.innerHTML='';t0=0;live.clear();show();});
+  ['gesturestart','gesturechange'].forEach(t=>document.addEventListener(t,e=>{e.preventDefault();cnt.G++;add('c',t);show();},{passive:false}));
+  let lastUp=0;
+  document.addEventListener('pointerdown',e=>{if(e.pointerType!=='touch')return;cnt.P++;add('p',`pointer按下 ${name[laneAt(e.clientX)]} id${e.pointerId}`);show();},true);
+  document.addEventListener('pointercancel',e=>{add('c',`pointer取消 id${e.pointerId}`);},true);
+  document.addEventListener('click',e=>{cnt.K++;add('k',`click ${name[laneAt(e.clientX)]}`);show();},true);
+  document.addEventListener('dblclick',e=>{cnt.D++;add('k',`dblclick ${name[laneAt(e.clientX)]}`);show();},true);
+  document.addEventListener('mousedown',e=>{add('k',`mousedown ${name[laneAt(e.clientX)]}`);},true);
+})();
+</script>
+</body></html>
