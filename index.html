@@ -163,7 +163,7 @@ const LANE_SEP=0.16;     // min distance between two entities in the same lane (
 const SKINS=['#93c75a','#7cae6c','#a9bd5c','#72b38e'];
 const SHIRTS=['#6b4f8a','#8a4646','#46668a','#7a6a3f','#4f7a4a','#8a5a2f'];
 const TUNE={d0:0.5,d1:0.022,d2:0.0001};
-const RQ={n:7,near:0.97,anim:0.07,dur:30,stun:0.4,pen:0.5,grace:0.08,lost:0.45};  // 速射: queue size, front slot, advance ease, run length, wrong-tap flash, wrong-tap time penalty, lost-tap window
+const RQ={n:7,near:0.97,anim:0.07,dur:30,stun:0.4,pen:0.5,grace:0.08};  // 速射: queue size, front slot, advance ease, run length, wrong-tap flash, wrong-tap time penalty
 const slotY=i=>RQ.near-i*Lt.gapN;
 const KEYS={'1':0,'2':1,'3':2,'4':3,'j':0,'k':1,'l':2,';':3};
 
@@ -419,7 +419,7 @@ const easeOut=t=>1-(1-t)*(1-t)*(1-t);
 function resetRun(mode){
   S.mode=mode;S.ents.length=0;S.kills=0;S.score=0;S.combo=0;S.maxCombo=0;S.hearts=3;S.time=0;S.penalty=0;S.rescued=0;
   S.shots=0;S.hits=0;S.wrong=0;S.stun=0;S.started=false;S.spawnedZ=0;S.blockedLane=-1;S.sinceSurv=0;S.announced={};S.endT=0;
-  pendTaps.length=0;lastRapid=null;parts.length=0;decals.length=0;floats.length=0;tracers.length=0;flashes.length=0;arrow=null;banner=null;redFlash=0;hurtFlash=0;
+  pendTaps.length=0;parts.length=0;decals.length=0;floats.length=0;tracers.length=0;flashes.length=0;arrow=null;banner=null;redFlash=0;hurtFlash=0;
 }
 function startGame(mode){
   ensureAudio();
@@ -530,15 +530,7 @@ function pressRapid(lane){
   S.started=true;
   const Z=S.ents[0];if(!Z)return;
   S.shots++;
-  const now=performance.now();
-  if(Z.lane===lane){hit(Z);rapidAdvance();flushPending();lastRapid={t:now,lost:false};return;}
-  // iPhone sometimes swallows one tap of a fast cross-lane roll before the page ever sees it
-  // (no touchstart, no pointerdown). A tap on the next zombie's lane right after a hit means the
-  // front one was tapped too: take both.
-  const Y=S.ents[1];
-  if(Y&&Y.lane===lane&&lastRapid&&!lastRapid.lost&&now-lastRapid.t<RQ.lost*1000){
-    btnAnim[Z.lane]=1;S.shots++;hit(Z);rapidAdvance();hit(S.ents[0]);rapidAdvance();flushPending();
-    lastRapid={t:now,lost:true};return;}
+  if(Z.lane===lane){hit(Z);rapidAdvance();flushPending();return;}
   // Two thumbs landing almost together can arrive in the wrong order (or in one event in id order).
   // A wrong-lane tap waits a moment: if the right lane is hit meanwhile, the waiting tap is judged
   // again against the new front zombie, so a fast cross-lane roll is never punished or lost.
@@ -546,7 +538,7 @@ function pressRapid(lane){
   setTimeout(()=>{const i=pendTaps.indexOf(p);if(i<0)return;pendTaps.splice(i,1);
     if(S.phase==='play'&&S.mode==='rapid')wrongRapid(lane);},RQ.grace*1000);
 }
-const pendTaps=[];let lastRapid=null;
+const pendTaps=[];
 function flushPending(){
   for(;;){const Z=S.ents[0];if(!Z)return;const i=pendTaps.findIndex(p=>p.lane===Z.lane);if(i<0)return;
     pendTaps.splice(i,1);btnAnim[Z.lane]=1;hit(Z);rapidAdvance();}
